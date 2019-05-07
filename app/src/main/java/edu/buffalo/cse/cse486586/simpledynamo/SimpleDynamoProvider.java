@@ -38,7 +38,6 @@ public class SimpleDynamoProvider extends ContentProvider {
 	private static String myPort;
 	private static  String myNode;
 	private static boolean  starQueryResult = false;
-	private static List<FailedData> failedList = new ArrayList<FailedData>();
 
 	public class FailedData{
 	    public String key;
@@ -50,6 +49,7 @@ public class SimpleDynamoProvider extends ContentProvider {
         }
 
     }
+    private static List<FailedData> failedList = new ArrayList<FailedData>();
 
 	public static class MyAvd{
 
@@ -72,7 +72,6 @@ public class SimpleDynamoProvider extends ContentProvider {
 
 	private ArrayList<MyAvd> avds_list = new ArrayList  <MyAvd>();
 	public static MyAvd prev, curr;
-	public int cur, succ1, succ2;
 
     public class Compare implements Comparator<String> {
 
@@ -93,6 +92,13 @@ public class SimpleDynamoProvider extends ContentProvider {
         }
     }
 
+    public static Uri getUri() {
+        Uri.Builder builder = new Uri.Builder();
+        builder.authority(myUri);
+        builder.scheme("content");
+        Uri uri = builder.build();
+        return uri;
+    }
 
 
     @Override
@@ -298,8 +304,6 @@ public class SimpleDynamoProvider extends ContentProvider {
                 failedList.add( new FailedData(msg[1],msg[2]));
                 Log.e("Failed list size", failedList.size() + "");
                 e.printStackTrace();
-
-
             }
             return null;
         }
@@ -313,8 +317,6 @@ public class SimpleDynamoProvider extends ContentProvider {
     @Override
 	public int delete(Uri uri, String selection, String[] selectionArgs) {
 		// TODO Auto-generated method stub
-
-
 
         if(selection.equals("@") || selection.equals("*")) {
             Log.v("Delete:", "Inside the delete");
@@ -568,13 +570,5 @@ public class SimpleDynamoProvider extends ContentProvider {
             formatter.format("%02x", b);
         }
         return formatter.toString();
-    }
-
-    public static Uri getUri() {
-        Uri.Builder builder = new Uri.Builder();
-        builder.authority(myUri);
-        builder.scheme("content");
-        Uri uri = builder.build();
-        return uri;
     }
 }
