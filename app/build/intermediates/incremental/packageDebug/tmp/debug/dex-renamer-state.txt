@@ -1,4 +1,4 @@
-#Tue May 07 12:41:05 EDT 2019
+#Tue May 07 19:52:43 EDT 2019
 base.0=/Users/dev/AndroidStudioProjects/SimpleDynamo/app/build/intermediates/dex/debug/mergeDexDebug/out
 path.0=classes.dex
 renamed.0=classes.dex

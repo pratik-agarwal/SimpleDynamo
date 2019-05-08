@@ -36,7 +36,6 @@ public class SimpleDynamoProvider extends ContentProvider {
 	String[] portlist = new String[]{"11108", "11112", "11116", "11120","11124"};
 	private static String myPort;
 	private static  String myNode;
-	//private static boolean  starQueryResult = false;
 
 	public class FailedData{
 	    public String key;
@@ -100,16 +99,16 @@ public class SimpleDynamoProvider extends ContentProvider {
             TelephonyManager tel = (TelephonyManager) getContext().getSystemService(Context.TELEPHONY_SERVICE);
             String portStr = tel.getLine1Number().substring(tel.getLine1Number().length() - 4);
             myNode = portStr;
+            Log.e("Printing my node: ", myNode);
             final String myPortStr = String.valueOf((Integer.parseInt(portStr) * 2));
             myPort = myPortStr;
-            Log.e("My Port------" , myPort);
-
+            Log.e("My Port :" , myPort);
             for( String myemuStr:portlist) {
                 curr = new MyAvd(myemuStr, genHash(String.valueOf(Integer.parseInt(myemuStr)/2)));
                 avds_list.add(curr);
             }
             Collections.sort(avds_list, new AvdCompare());
-            Log.e("Sorted Array List:", "Printing the list");
+            Log.e("Sorted Avd List:", "Printing the list");
             for (int i = 0; i < avds_list.size(); i++) {
                 Log.e("List element: ",  avds_list.get(i).myPort);
             }
@@ -117,6 +116,7 @@ public class SimpleDynamoProvider extends ContentProvider {
             new ServerTask().executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, serverSocket);
             // Insert failed key value pair if exist.
             GetFailedKeys();
+            Log.e(TAG, "After getting the fauled keys list");
         } catch (Exception ex) {
             ex.printStackTrace();
             Log.e(TAG, "Can't create a ServerSocket");
@@ -126,9 +126,9 @@ public class SimpleDynamoProvider extends ContentProvider {
 
     private void GetFailedKeys()
     {
-        Log.e("Inside failed keys fn-"," Getting the failed keys");
+        Log.e("Inside failed keys"," Getting the list of failed keys");
         try{
-            for(int i =0; i < avds_list.size();i++) {
+            for(int i = 0; i < avds_list.size(); i++) {
                 if (!avds_list.get(i).myPort.equals(myPort)) {
                     Log.e("On create -" + myPort, "asking keys from -" + avds_list.get(i).myPort);
                     new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, "Get Keys:" + myPort + ": NA" + ":" + avds_list.get(i).myPort);
@@ -159,12 +159,12 @@ public class SimpleDynamoProvider extends ContentProvider {
                 while (true) {
                     Socket socket = serverSocket.accept();
                     scr = new Scanner(socket.getInputStream());
-                    //ptr = new PrintWriter(socket.getOutputStream(), true);
                     String command = scr.nextLine();
-                    String msg [] = command.split(":");
+                    String msg[] = command.split(":");
+
                     if (msg[0].equals("InsertKey")) {
-                        Log.e("At server-" + myPort, " Insert - " +  msg[1]);
-                        Log.e("Inside the Insert cmd", command);
+                        Log.e("Operation to perform: ", msg[0]);
+                        Log.e("At node - " + myPort, " Insert - " +  msg[1]);
                         String key = msg[1];
                         String value = msg[2];
                         DataOutputStream dos = new DataOutputStream(getContext().openFileOutput(key, Context.MODE_PRIVATE));
@@ -174,10 +174,9 @@ public class SimpleDynamoProvider extends ContentProvider {
                     }
                     else if( msg[0].equals("Query"))
                     {
+                        Log.e("Operation to perform: ", msg[0]);
                         StringBuilder sb = new StringBuilder();
-                        String columnNames[] = new String[]{"key", "value"};
-                        Log.e("At server - " + myPort ," REquest for query from-" + msg[1]);
-                        MatrixCursor matrixCursor = new MatrixCursor( new String [] {"key","value"});
+                        Log.e("At node : " + myPort ," REquest for query from -" + msg[1]);
                         for (File file : getContext().getFilesDir().listFiles()) {
                             DataInputStream dis = new DataInputStream(getContext().openFileInput(file.getName()));
                             String value = dis.readUTF();
@@ -190,6 +189,7 @@ public class SimpleDynamoProvider extends ContentProvider {
                     }
                     else if(msg[0].equals("SingleQuery"))
                     {
+                        Log.e("Operation to perform: ", msg[0]);
                         Cursor cursor =  getContext().getContentResolver().query(getUri(),null, msg[2], null, null);
                         StringBuilder sb = new StringBuilder();
                         while(cursor.moveToNext()) {
@@ -200,20 +200,22 @@ public class SimpleDynamoProvider extends ContentProvider {
                         DataOutputStream out = new DataOutputStream(socket.getOutputStream());
                         out.writeUTF(sb.toString());
                     }
-                    else if( msg[0].equals("Get Keys")){
+                    else if(msg[0].equals("Get Keys")){
+                        Log.e("Operation to perform: ", msg[0]);
                         StringBuilder sb = new StringBuilder();
-                        for(int i =0 ; i < failedList.size(); i++) {
+                        for(int i = 0 ; i < failedList.size(); i++) {
                             sb.append(failedList.get(i).key + "-" + failedList.get(i).value + "##");
                         }
                         Log.e("At server-" + myPort , " Sending my failed keys-" + sb.toString() );
                         SendMyKeysToFailedPort(msg[1], sb.toString());
                     }
-                    else if (msg[0].equals("Get Keys Result")) {
+                    else if(msg[0].equals("Get Keys Result")) {
+                        Log.e("Operation to perform: ", msg[0]);
                         Log.e("At server- " + myPort, "Inserting failed keys");
                         String keys = msg[2];
                         if (!keys.equals("empty")) {
                             Log.e("At server-" + myPort, "Get key result keys received-" + keys);
-                            Log.e("Keys are not null", keys);
+                            Log.e("Printed key not null", keys);
                             String[] receivedMessageTokens = keys.split("##");
                             for (String keyvalue : receivedMessageTokens) {
                                 String[] keyValueToken = keyvalue.split("-");
@@ -226,8 +228,7 @@ public class SimpleDynamoProvider extends ContentProvider {
                         }
                     }
                     else{
-                        Log.e("At server", "Somethng else received at server");
-                        Log.e("Different message-",command );
+                        Log.e("At server", "Something else received at server");
                     }
                 }
             } catch (IOException e) {
@@ -240,15 +241,16 @@ public class SimpleDynamoProvider extends ContentProvider {
     private void SendMyKeysToFailedPort(String failedPort, String keys)
     {
         try {
-            if(keys.length() >1) {
+            if(keys.length() > 1) {
                 String message = "Get Keys Result:" + myPort + ":" + keys + ":" + failedPort;
+                Log.e(TAG, "port : " + myPort);
                 new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, message);
             }
             else {
                 String message = "Get Keys Result:" + myPort + ":" + "empty" + ":" + failedPort;
+                Log.e(TAG, "port : " + myPort);
                 new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, message);
             }
-
             failedList.clear();
         }catch (Exception ex){
             ex.printStackTrace();
@@ -261,18 +263,18 @@ public class SimpleDynamoProvider extends ContentProvider {
         protected Void doInBackground(String... strings) {
 
             String temp = strings[0];
-            Log.e("Mesage to send-" , temp);
+            Log.e("Message to send -" , temp);
             String[] msg = temp.split(":");
             try{
                 String port = msg[3];
+                Log.e(TAG, "Checking the port: " + port);
                 Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}),
                         Integer.parseInt(port));
                 socket.setSoTimeout(2000);
                 PrintWriter ptr = new PrintWriter(socket.getOutputStream(), true);
                 ptr.println(temp);
                 ptr.flush();
-
-                if( msg[0].equals("InsertKey")) {
+                if(msg[0].equals("InsertKey")) {
                     DataInputStream inputStream = new DataInputStream(socket.getInputStream());
                     String message = inputStream.readUTF();
                     if (message == null) {
@@ -283,14 +285,13 @@ public class SimpleDynamoProvider extends ContentProvider {
                 Log.e(TAG, "ClientTask UnknownHostException");
             } catch (Exception e) {
                 if(msg[0].equals("InsertKey")) {
-                    Log.e("At port -" + myPort, "***** EXCEPTION OCCURED");
+                    Log.e("At port -" + myPort, "***** EXCEPTION OCCURED** -  CHeck in the client task");
                     Log.e("Exception at function -", msg[0]);
                     failedList.add(new FailedData(msg[1], msg[2]));
                     Log.e("Failed list size", failedList.size() + "");
                 }
-                else if (msg[0].equals("Query"))
-                {
-
+                else if (msg[0].equals("Query")) {
+                    Log.e("Cannot return here", "Not possible -  Random catch");
                 }
                 e.printStackTrace();
             }
@@ -304,7 +305,7 @@ public class SimpleDynamoProvider extends ContentProvider {
 		// TODO Auto-generated method stub
 
         if(selection.equals("@") || selection.equals("*")) {
-            Log.v("Delete:", "Inside the delete");
+            Log.v("Deleting it all :", "Inside the delete");
             File files[] = getContext().getFilesDir().listFiles();
             for (File file : files) {
                 file.delete();
@@ -342,23 +343,27 @@ public class SimpleDynamoProvider extends ContentProvider {
             temp_list.add("5562");
             //temp_list.add(key);
             Collections.sort(temp_list, new Compare());
+            Log.e(TAG,"Checking the sorted list: ");
+            for (int i = 0; i < temp_list.size(); i++){
+                Log.e("List in SOrted fashion:", temp_list.get(i));
+            }
             int ind = -1;
-            for(int i =0 ; i < temp_list.size() ; i++) {
+            for(int i = 0 ; i < temp_list.size() ; i++) {
                 if( hashedKey.compareTo(genHash(temp_list.get(i))) < 0 ) {
                     ind = i;
                     break;
                 }
             }
             if( ind == -1) {
-                ind =0;
+                ind = 0;
             }
             List<Integer> indexes = retIndex(ind);
-            Log.e("Index length-" , indexes.size() + "");
-            Log.e("Key index - " + ind , " And it should be inserted in " + indexes.get(0).toString() + "-" + indexes.get(1) + " -" + indexes.get(2));
+            Log.e("Index length -" , indexes.size() + " ");
+            Log.e("Key index - " + ind , " And should be inserted in " + indexes.get(0).toString() + "-" + indexes.get(1) + " -" + indexes.get(2));
             for (int index : indexes) {
                 if(temp_list.get(ind).equals(myNode)) {
-                    Log.e("Insert in my node-", "Key-" + key);
-                    Log.e("Insert in avd with","key = "+  genHash(key));
+                    Log.e("Insert in my node-", "Key =" + key);
+                    Log.e("Insert in avd with ","key = "+  genHash(key));
                     DataOutputStream dos = new DataOutputStream(getContext().openFileOutput(key, Context.MODE_PRIVATE));
                     dos.writeUTF(value);
                 }
@@ -395,7 +400,6 @@ public class SimpleDynamoProvider extends ContentProvider {
                     portIndex.add(ind + 1);
                     portIndex.add(ind + 2);
                 }
-
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -408,7 +412,7 @@ public class SimpleDynamoProvider extends ContentProvider {
 
         try {
             MatrixCursor matrixCursor = new MatrixCursor(new String[]{"key", "value"});
-            String columnNames[] = new String[]{"key", "value"};
+            String columnNames[] = new String[]{"key", "value"}; // had to assign something other than null
             if (selection.equals("@")) {
                 for (File file : getContext().getFilesDir().listFiles()) {
                     DataInputStream dis = new DataInputStream(getContext().openFileInput(file.getName()));
@@ -426,12 +430,11 @@ public class SimpleDynamoProvider extends ContentProvider {
                     columnNames = new String[]{file.getName(), value};
                     matrixCursor.addRow(columnNames);
                 }
-               for(int i =0 ; i< avds_list.size();i++) {
+               for(int i = 0 ; i < avds_list.size(); i++) {
                    try{
-                        if( !avds_list.get(i).myPort.equals(myPort)) {
+                        if(!avds_list.get(i).myPort.equals(myPort)) {
                             String message = "Query" + ":" + myPort + ":" + "NA" + ":" + String.valueOf(Integer.parseInt(avds_list.get(i).myPort));
                             Log.e("Message to send", message);
-                            //new ClientTask().executeOnExecutor(AsyncTask.SERIAL_EXECUTOR, message);
                             Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}), Integer.parseInt(avds_list.get(i).myPort));
                             PrintWriter ptr = new PrintWriter(socket.getOutputStream(), true);
                             ptr.println(message);
@@ -441,9 +444,8 @@ public class SimpleDynamoProvider extends ContentProvider {
                             Log.e("Received message -", receivedMessage);
                             scr.close();
                             socket.close();
-                            // Log.e("At port-" + myPort , "REceived string from "+avds_list.get(i).myPort + "-" + receivedMessage );
+                            Log.e("At port-" + myPort , "Received string from "+avds_list.get(i).myPort + "-" + receivedMessage );
                             String[] receivedMessageTokens = receivedMessage.split("##");
-                            // Scanner scr = new Scanner(socket.getInputStream());
                             for (String keyAndValue : receivedMessageTokens) {
                                 String[] keyAndValueTokens = keyAndValue.split("-");
                                 Log.e("Key value-", keyAndValueTokens[0] + "-" + keyAndValueTokens[1]);
@@ -460,6 +462,7 @@ public class SimpleDynamoProvider extends ContentProvider {
                 //Single query
                 int actualIndex = -1;
                 try {
+                    //Copying the same stuff from PA3
                     boolean fileRet = false;
                     Log.e("Single query", "Yo single query");
                     File files[] = getContext().getFilesDir().listFiles();
@@ -475,17 +478,18 @@ public class SimpleDynamoProvider extends ContentProvider {
                         }
                     }
                     if (fileRet == false) {
-                        Log.e("Info", "File not found,ready to ping next");
+                        Log.e("Info", "File not found, ready to ping next");
                         String val = "";
                         String msg = "SingleQuery:" + myPort + ":" + selection;
-                        for(int i =0 ; i < avds_list.size() ; i++) {
+                        for(int i = 0 ; i < avds_list.size() ; i++) {
                             if(genHash(selection).compareTo(genHash(String.valueOf( Integer.parseInt( avds_list.get(i).myPort )/2))) <0 ) {
                                 actualIndex = i;
                                 break;
                             }
                         }
-                        if(actualIndex == -1)
-                            actualIndex =0;
+                        if(actualIndex == -1) {
+                            actualIndex = 0;
+                        }
                         Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}), Integer.parseInt(avds_list.get(actualIndex).myPort));
                         PrintWriter ptr = new PrintWriter(socket.getOutputStream(), true);
                         ptr.println(msg);
@@ -500,7 +504,7 @@ public class SimpleDynamoProvider extends ContentProvider {
                     }
                 }catch (Exception ex) {
                     ex.printStackTrace();
-                    List<Integer> replicationdata =   retIndex(actualIndex);
+                    List<Integer> replicationdata = retIndex(actualIndex);
                     String msg = "SingleQuery:" + myPort + ":" + selection;
                     Socket socket = new Socket(InetAddress.getByAddress(new byte[]{10, 0, 2, 2}), Integer.parseInt(avds_list.get(replicationdata.get(1)).myPort));
                     PrintWriter ptr = new PrintWriter(socket.getOutputStream(), true);
